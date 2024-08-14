@@ -52,10 +52,11 @@ class Totoro(Policy):
     def __init__(self, graph: nx.Graph) -> None:
         super().__init__("Totoro", graph)
         self.t = 0
+        self.C = 1
 
     def constraint(self, u, mean_success_rate, attempt):
         return (attempt * kl_divergence(mean_success_rate, u)
-                 - 1 * math.log(self.t)) <= 0
+                 - self.C * math.log(self.t)) <= 0
 
 
     def weight_func(self, success: int, attempt: int, tol: float=1e-9):
@@ -98,7 +99,7 @@ class Totoro(Policy):
             link['ETC'] = self.weight_func(link['success'], link['attempt'])
 
         for neighbor in self.graph.neighbors(src):
-            path, cost = self.Jt(src, dst)
+            path, cost = self.Jt(neighbor, dst)
             total_cost = self.graph.edges[(src, neighbor)]['ETC'] + cost
 
             if path is None:
