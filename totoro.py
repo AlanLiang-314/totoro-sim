@@ -151,13 +151,20 @@ class Simulator:
             print(f"no such policy: {self.Policy}")
             exit(1)
 
-        print(f"load graph with {V} nodes and {E} edges with {packet_num} packets")    
+        print(f"load graph with {V} nodes and {E} edges with {packet_num} packets")
+
+    def shortest_path(self, src, dst):
+            weight_func = lambda u, v, d: d['hidden_success_rate']
+            path = nx.dijkstra_path(self.graph, src, dst, weight=weight_func)
+            return path
 
     def simulate(self):
 
         for idx, packet in self.packets.items():
             src, dst = int(packet.src), int(packet.dst)
             print(f"sending packet {idx} from {src} to {dst}")
+
+            packet_path = [src]
             
             while src != dst:
                 # print(f"packet pos: {src}")
@@ -168,23 +175,32 @@ class Simulator:
                 else:
                     best_neighbor = best_neighbor[0]
                 
-                print(f"choose link {src}->{best_neighbor}, ", end="")
+                # print(f"choose link {src}->{best_neighbor}, ", end="")
 
                 chosen_link = self.graph.edges[(src, best_neighbor)]
                 if np.random.random() <= chosen_link['hidden_success_rate']:
-                    print("transmission success")
+                    # print("transmission success")
                     chosen_link['success'] += 1
+                    packet_path.append(best_neighbor)
                     src = best_neighbor
                 else:
-                    print("transmission failed")
+                    pass
+                    # print("transmission failed")
                 chosen_link['attempt'] += 1
 
                 self.t += 1
-
-            for link, attri in self.graph.edges.items():
-                print(f"link {link} {attri}")
+            
+            path_string = "->".join(map(str, packet_path))
+            print(f"path len: {len(packet_path)}")
+            # print(f"path: {path_string}")
+            # for link, attri in self.graph.edges.items():
+            #     print(f"link {link} {attri}")
             # break
 
+        best_path = self.shortest_path(src, dst)
+        path_string = "->".join(map(str, best_path))
+        print(f"best path: {path_string}")
+
 sim = Simulator("Totoro")
-sim.load_sim("test.txt")
+sim.load_sim("testset/test/001.txt")
 sim.simulate()

@@ -3,7 +3,7 @@ import os
 import math
 
 # seeds: int = 1
-testset_type: str = "dense_connected"
+testset_type: str = "test"
 
 if not os.path.exists(os.path.join("testset", testset_type)):
     os.makedirs(os.path.join("testset", testset_type))
@@ -37,8 +37,8 @@ def gen_undirected_graph(n):
     return edges
 
 
-for seeds in range(1, 101):
-    random.seed(seeds)
+for seeds in range(1, 2):
+    random.seed(42)
 
     # tiny
     # n = random.randint(8, 15)
@@ -54,25 +54,22 @@ for seeds in range(1, 101):
     # std_dev = mean / 2
 
     # small
-    n = random.randint(250, 650)
-    packet_size = random.randint(25, 65)
-    mean = packet_size / random.randint(3, 5) - 1
-    std_dev = (random.random() * 4)
+    nodes = random.randint(20, 50)
+    packet_num = 100
 
-    samples = [max(round(random.gauss(mean, std_dev)), 0) + 1 for _ in range(n)]
-    samples[0] = 0
-    ans = gen_undirected_graph(n)
-    agg_start_time = round(math.log2(n) * 30)
-    dis_start_time = agg_start_time * 2
-    data_trans_time = agg_start_time * 3
-    sim_time = data_trans_time * 2
+    # samples = [max(round(random.gauss(mean, std_dev)), 0) + 1 for _ in range(n)]
+    graph = gen_undirected_graph(nodes)
+    edges = len(graph)
+
+    src = random.randint(0, nodes)
+    dst = random.randint(0, nodes)
 
     with open(f"testset/{testset_type}/{str(seeds).zfill(3)}.txt", 'w', encoding="utf-8") as f:
-        f.write(f"{n} {len(ans)} {packet_size}\n{sim_time} {0} {agg_start_time}\n{dis_start_time} {data_trans_time}\n")
-        for i, weight in enumerate(samples):
-            f.write(f"{i} {weight}\n")
-        for i, (u, v) in enumerate(ans):
-            f.write(f"{i} {u} {v}\n")
+        f.write(f"{nodes} {edges} {packet_num}\n")
+        for u, v in graph:
+            f.write(f"{u} {v} {random.random()}\n")
+        for _ in range(packet_num):
+            f.write(f"{src} {dst} {100}\n")
 
 # n = 10
 # ans = gen_undirected_graph(n)
