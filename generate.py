@@ -24,17 +24,25 @@ def gen_undirected_graph(n):
 
         edges.append((rnd, to) if rnd < to else (to, rnd))
 
+    # ensure at least one pair of nodes has a distance greater than 5
+    if n > 6:
+        u, v = random.sample(range(n), 2)
+        while abs(u - v) <= 5:
+            u, v = random.sample(range(n), 2)
+        edges.append((u, v) if u < v else (v, u))
+        node1, node2 = u, v
+
     # add extra edges
-    for _ in range(random.randint(n, n)): # FIXME: collision!
+    for _ in range(random.randint(3 * n, 4 * n)): # FIXME: collision!
         u = random.randint(0, n - 2)
         v = random.randint(u + 1, n - 1)
-        if (u, v) not in edges:
+        if (u, v) not in edges and (v, u) not in edges:
             edges.append((u, v))
 
     # randomly swap u, v
     edges = [(u, v) if random.randint(0, 1) else (v, u) for u, v in edges]
     random.shuffle(edges)
-    return edges
+    return node1, node2, edges
 
 
 for seeds in range(1, 2):
@@ -55,14 +63,14 @@ for seeds in range(1, 2):
 
     # small
     nodes = random.randint(20, 50)
-    packet_num = 1000
+    packet_num = 50
 
     # samples = [max(round(random.gauss(mean, std_dev)), 0) + 1 for _ in range(n)]
-    graph = gen_undirected_graph(nodes)
+    src, dst, graph = gen_undirected_graph(nodes)
     edges = len(graph)
 
-    src = random.randint(0, nodes)
-    dst = random.randint(0, nodes)
+    # src = random.randint(0, nodes)
+    # dst = random.randint(0, nodes)
 
     with open(f"testset/{testset_type}/{str(seeds).zfill(3)}.txt", 'w', encoding="utf-8") as f:
         f.write(f"{nodes} {edges} {packet_num}\n")

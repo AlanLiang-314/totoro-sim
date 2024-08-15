@@ -87,9 +87,9 @@ class Totoro(Policy):
 
             return path, cost
         except nx.NetworkXNoPath:
-            return None, 0
+            return None, float('inf')
         
-    def choose_best(self, src, dst, t):
+    def choose_best(self, src, dst, t, printing=False):
         self.t = t
         best_neighbor = []
         best_cost = float('inf')
@@ -101,16 +101,23 @@ class Totoro(Policy):
         for neighbor in self.graph.neighbors(src):
             path, cost = self.Jt(neighbor, dst)
             total_cost = self.graph.edges[(src, neighbor)]['ETC'] + cost
+            if printing:
+                print(f"path {path}, cost {total_cost}")
 
             if path is None:
                 print(f"No path found from {src} to {dst}")
                 exit(1)
 
+            
             if best_cost > total_cost:
                 best_cost = total_cost
                 best_neighbor = [neighbor]
-            elif (best_cost - total_cost) <= 1e-10:
+            elif abs(best_cost - total_cost) <= 1e-10:
                 best_neighbor.append(neighbor)
+                
+            if printing:
+                print(f"best neighbor {best_neighbor}, best cost {best_cost}")
+
 
         return best_neighbor
 
@@ -144,21 +151,21 @@ class Simulator:
         
         fp.close()
 
-        # init policy
-        if self.Policy == "Totoro":
-            self.policy = Totoro(self.graph)
-        else:
-            print(f"no such policy: {self.Policy}")
-            exit(1)
-
         print(f"load graph with {V} nodes and {E} edges with {packet_num} packets")
 
     def shortest_path(self, src, dst):
-            weight_func = lambda u, v, d: d['hidden_success_rate']
+            weight_func = lambda u, v, d: 1 / (d['hidden_success_rate'] + 1e-9)
             path = nx.dijkstra_path(self.graph, src, dst, weight=weight_func)
             return path
 
     def simulate(self):
+        # init policy
+        if self.Policy == "Totoro":
+            self.policy = Totoro(graph=self.graph)
+        else:
+            print(f"no such policy: {self.Policy}")
+            exit(1)
+        
         path_history = []
 
         for idx, packet in self.packets.items():
@@ -192,16 +199,17 @@ class Simulator:
                 self.t += 1
             
             path_string = "->".join(map(str, packet_path))
-            print(f"path len: {len(packet_path)}")
-            # path_history.append(len(packet_path))
-            # print(f"path: {path_string}")
-            sum = 0
-            for link, attri in self.graph.edges.items():
-                mean_success_rate = attri['success'] / attri['attempt'] if attri['attempt'] != 0 else 0
-                sum += abs(mean_success_rate -  attri['hidden_success_rate'])
-                # print(f"link {link} {attri}")
-            sum /= len(self.graph.edges.items())
-            path_history.append(sum)
+            path_weight = sum(1 / (self.graph.edges[(w, v)]['hidden_success_rate'] + 1e-9) for w, v in zip(packet_path, packet_path[1:]))
+            path_history.append(path_weight)
+            
+            print(f"path: {path_string}")
+            # sum = 0
+            # for link, attri in self.graph.edges.items():
+            #     mean_success_rate = attri['success'] / attri['attempt'] if attri['attempt'] != 0 else 0
+            #     sum += abs(mean_success_rate -  attri['hidden_success_rate'])
+            #     # print(f"link {link} {attri}")
+            # sum /= len(self.graph.edges.items())
+            # path_history.append(sum)
             # break
 
         src, dst = self.packets[0].src, self.packets[0].dst
@@ -220,7 +228,7 @@ class Simulator:
         # plt.axhline(y=len(best_path), color='r', linestyle='--', label=f'best: {len(best_path)}')
 
         plt.xlabel('packet num')
-        plt.ylabel('Path len')
+        plt.ylabel('Path weight')
         plt.title('Path History and Moving Average')
         plt.legend()
 
@@ -230,6 +238,6 @@ class Simulator:
     
 
 
-sim = Simulator("Totoro")
-sim.load_sim("testset/test/001.txt")
-sim.simulate()
+# sim = Simulator("Totoro")
+# sim.load_sim("testset/test/001.txt")
+# sim.simulate()
