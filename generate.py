@@ -25,7 +25,7 @@ def gen_undirected_graph(n):
         edges.append((rnd, to) if rnd < to else (to, rnd))
 
     # add extra edges
-    for _ in range(random.randint(4 * n, 8 * n)): # FIXME: collision!
+    for _ in range(random.randint(n, n)): # FIXME: collision!
         u = random.randint(0, n - 2)
         v = random.randint(u + 1, n - 1)
         if (u, v) not in edges:
@@ -38,7 +38,7 @@ def gen_undirected_graph(n):
 
 
 for seeds in range(1, 2):
-    random.seed(42)
+    # random.seed(42)
 
     # tiny
     # n = random.randint(8, 15)
@@ -55,7 +55,7 @@ for seeds in range(1, 2):
 
     # small
     nodes = random.randint(20, 50)
-    packet_num = 100
+    packet_num = 1000
 
     # samples = [max(round(random.gauss(mean, std_dev)), 0) + 1 for _ in range(n)]
     graph = gen_undirected_graph(nodes)

@@ -52,7 +52,7 @@ class Totoro(Policy):
     def __init__(self, graph: nx.Graph) -> None:
         super().__init__("Totoro", graph)
         self.t = 0
-        self.C = 1
+        self.C = 1.414
 
     def constraint(self, u, mean_success_rate, attempt):
         return (attempt * kl_divergence(mean_success_rate, u)
@@ -120,7 +120,7 @@ class Simulator:
         self.Policy = name
         self.policy: Policy = None
         self.graph = nx.Graph()
-        self.packets: Dict[Packet] = {}
+        self.packets: Dict[int, Packet] = {}
         self.t = 2
     
     def load_sim(self, path: str):
@@ -159,6 +159,7 @@ class Simulator:
             return path
 
     def simulate(self):
+        path_history = []
 
         for idx, packet in self.packets.items():
             src, dst = int(packet.src), int(packet.dst)
@@ -178,7 +179,7 @@ class Simulator:
                 # print(f"choose link {src}->{best_neighbor}, ", end="")
 
                 chosen_link = self.graph.edges[(src, best_neighbor)]
-                if np.random.random() <= chosen_link['hidden_success_rate']:
+                if random.random() <= chosen_link['hidden_success_rate']:
                     # print("transmission success")
                     chosen_link['success'] += 1
                     packet_path.append(best_neighbor)
@@ -192,14 +193,42 @@ class Simulator:
             
             path_string = "->".join(map(str, packet_path))
             print(f"path len: {len(packet_path)}")
+            # path_history.append(len(packet_path))
             # print(f"path: {path_string}")
-            # for link, attri in self.graph.edges.items():
-            #     print(f"link {link} {attri}")
+            sum = 0
+            for link, attri in self.graph.edges.items():
+                mean_success_rate = attri['success'] / attri['attempt'] if attri['attempt'] != 0 else 0
+                sum += abs(mean_success_rate -  attri['hidden_success_rate'])
+                # print(f"link {link} {attri}")
+            sum /= len(self.graph.edges.items())
+            path_history.append(sum)
             # break
 
+        src, dst = self.packets[0].src, self.packets[0].dst
         best_path = self.shortest_path(src, dst)
         path_string = "->".join(map(str, best_path))
         print(f"best path: {path_string}")
+
+        window_size = 20
+        moving_avg = np.convolve(path_history, np.ones(window_size)/window_size, mode='valid')
+        plt.plot(path_history, label='Path History', marker='o')
+
+        # Plot moving average
+        # plt.plot(range(window_size-1, len(path_history)), moving_avg, label='Moving Average', marker='x')
+
+        # Draw a horizontal line at the mean value
+        # plt.axhline(y=len(best_path), color='r', linestyle='--', label=f'best: {len(best_path)}')
+
+        plt.xlabel('packet num')
+        plt.ylabel('Path len')
+        plt.title('Path History and Moving Average')
+        plt.legend()
+
+        # Show the plot
+        plt.show()
+
+    
+
 
 sim = Simulator("Totoro")
 sim.load_sim("testset/test/001.txt")
