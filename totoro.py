@@ -7,6 +7,8 @@ from typing import List, Dict
 import networkx as nx
 
 def kl_divergence(p, q):
+    # kl divergence, but can deal with [0, 1]
+    
     def new_log(x):
         if x == 0:
             return x
@@ -45,6 +47,58 @@ class Policy(ABC):
     def choose_best(self, src: int, dst: int):
         pass
 
+
+class End2End(Policy):
+    def __init__(self, graph: nx.Graph) -> None:
+        super().__init__("End2End", graph)
+        self.t = 0
+        self.C = 1.414
+        
+    def constraint(self, u, mean_success_rate, attempt):
+        return (attempt * kl_divergence(mean_success_rate, u)
+                 - self.C * math.log(self.t)) <= 0
+
+
+    def weight_func(self, success: int, attempt: int, tol: float=1e-9):
+        if attempt == 0:
+            # if not yet attempted, try it first
+            return 0
+
+        mean_success_rate = success / attempt
+        
+        low, high = mean_success_rate, 1
+        
+        while high - low > tol:
+            mid = (low + high) / 2
+            if self.constraint(mid, mean_success_rate, attempt):
+                low = mid
+            else:
+                high = mid
+
+        return 1 / low
+    
+    def Jt(self, src, dst):
+        return 0
+    
+    def choose_best(self, src, dst, t, printing=False):
+        self.t = t
+        best_neighbor = []
+        best_cost = float('inf')
+
+        for neighbor in self.graph.neighbors(src):
+            link = self.graph.edges[(src, neighbor)]
+            link['ETC'] = self.weight_func(link['success'], link['attempt'])
+            
+            if best_cost > link['ETC']:
+                best_cost = link['ETC']
+                best_neighbor = [neighbor]
+            elif abs(best_cost - link['ETC']) <= 1e-10:
+                best_neighbor.append(neighbor)
+                
+            if printing:
+                print(f"best neighbor {best_neighbor}, best cost {best_cost}")
+
+        return best_neighbor
 
 
 
@@ -128,7 +182,7 @@ class Simulator:
         self.policy: Policy = None
         self.graph = nx.Graph()
         self.packets: Dict[int, Packet] = {}
-        self.t = 2
+        self.t = 1
     
     def load_sim(self, path: str):
         # load graph and packet sequence from .txt file
@@ -157,11 +211,20 @@ class Simulator:
             weight_func = lambda u, v, d: 1 / (d['hidden_success_rate'] + 1e-9)
             path = nx.dijkstra_path(self.graph, src, dst, weight=weight_func)
             return path
+        
+    def reset(self):
+        for edge in self.graph.edges.values():
+            edge['success'] = 0
+            edge['attempt'] = 0
+            edge['ETC'] = 0
+            self.t = 1
 
     def simulate(self):
         # init policy
         if self.Policy == "Totoro":
             self.policy = Totoro(graph=self.graph)
+        elif self.Policy == "End2End":
+            self.policy = End2End(graph=self.graph)
         else:
             print(f"no such policy: {self.Policy}")
             exit(1)
