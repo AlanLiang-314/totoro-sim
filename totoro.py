@@ -176,6 +176,29 @@ class End2End(Policy):
             best_path = best_path[0]
             
         return best_path, self.avaliable_path[best_path]['path']
+    
+    def __choose_best(self, src, dst, t, printing=False):
+        if self.first_attempt:
+            for path in nx.all_simple_paths(self.graph, source=src, target=dst):
+                print(f"path: {path}")
+                self.avaliable_path.append({'path': path, 'success': 0, 'attempt': 0})
+            self.first_attempt = False
+            print(f"there are {len(self.avaliable_path)} paths from {src} to {dst}")
+        
+        self.t = t
+        costs = []
+                        
+        for i, path in enumerate(self.avaliable_path):
+            cost = self.weight_func(path['success'], path['attempt'])
+            print(f"path {path}, cost {cost}")
+            costs.append(cost)
+            
+        costs = np.array(costs)
+        softmax_probs = np.exp(-costs) / np.sum(np.exp(-costs))
+        best_path = np.random.choice(range(len(costs)), p=softmax_probs)
+            
+        return best_path, self.avaliable_path[best_path]['path']
+
 
 
 class Totoro(Policy):
@@ -263,6 +286,11 @@ class Simulator:
         # self.graph = nx.Graph()
         self.graph = nx.DiGraph()
         self.packets: Dict[int, Packet] = {}
+        self.V: int = 0
+        self.E: int = 0
+        self.start: int = None
+        self.end: int = None
+        self.packet_num: int = 0
         self.t = 1
     
     def load_sim(self, path: str):
@@ -271,22 +299,22 @@ class Simulator:
         fp = open(path, 'r')
         itertor = iter(fp)
         
-        V, E, packet_num = map(int, next(itertor).split())
+        self.V, self.E, self.packet_num, self.start, self.end = map(int, next(itertor).split())
         
         # load link and it's prob
-        for _ in range(E):
+        for _ in range(self.E):
             src, dst, prob = list(map(float, next(itertor).split()))
             src, dst = int(src), int(dst)
             self.graph.add_edge(src, dst, hidden_success_rate=prob, ETC=0, attempt=0, success=0)
 
         # load packets
-        for idx in range(packet_num):
-            src, dst, time = list(map(float, next(itertor).split()))
-            self.packets[idx] = Packet(src, dst, time)
+        # for idx in range(packet_num):
+        #     src, dst, time = list(map(float, next(itertor).split()))
+        #     self.packets[idx] = Packet(src, dst, time)
         
         fp.close()
 
-        print(f"load graph with {V} nodes and {E} edges with {packet_num} packets")
+        print(f"load graph with {self.V} nodes and {self.E} edges with {self.packet_num} packets")
 
     def shortest_path(self, src, dst):
             weight_func = lambda u, v, d: 1 / (d['hidden_success_rate'] + 1e-9)
@@ -304,8 +332,9 @@ class Simulator:
         path_history = []
         print(f"packet num: {len(self.packets)}")
         
-        for idx, packet in self.packets.items():
-            src, dst = int(packet.src), int(packet.dst)
+        for idx in range(self.packet_num):
+            src, dst = self.start, self.end
+            # src, dst = int(packet.src), int(packet.dst)
             print(f"sending packet {idx} from {src} to {dst}")
             
             best_path_id, best_path = self.policy.choose_best(src, dst, self.t)
@@ -324,10 +353,23 @@ class Simulator:
             
             path_string = "->".join(map(str, best_path))
             path_weight = sum(1 / (self.graph.edges[(w, v)]['hidden_success_rate'] + 1e-9) for w, v in zip(best_path, best_path[1:]))
-            path_history.append(path_weight)
+            # path_history.append(path_weight)
+            path_history.append(1 if best_path == [1, 2, 7, 8, 10] else 0)
             print(f"path: {path_string}")
             
-        self.plot_hist(path_history)
+        # self.plot_hist(path_history)
+        plt.figure()
+        window_size = 100
+        moving_averages = np.convolve(path_history, np.ones(window_size)/window_size, mode='valid')
+        moving_average_list = list(moving_averages)
+        plt.plot(moving_average_list, label="mav")
+
+        # 添加圖例
+        plt.legend()
+
+        # 顯示圖表
+        plt.show()
+
 
                     
 
@@ -346,9 +388,12 @@ class Simulator:
             exit(1)
         
         path_history = []
+        
+        exp_diff = {edge:[] for edge in self.graph.edges}
 
-        for idx, packet in self.packets.items():
-            src, dst = int(packet.src), int(packet.dst)
+        for idx in range(self.packet_num):
+            src, dst = self.start, self.end
+            # src, dst = int(packet.src), int(packet.dst)
             print(f"sending packet {idx} from {src} to {dst}")
 
             packet_path = [src]
@@ -374,15 +419,63 @@ class Simulator:
             
             path_string = "->".join(map(str, packet_path))
             path_weight = sum(1 / (self.graph.edges[(w, v)]['hidden_success_rate'] + 1e-9) for w, v in zip(packet_path, packet_path[1:]))
-            path_history.append(path_weight)
+            path_history.append(1 if packet_path == [1, 2, 7, 8, 10] else 0)
+            
+            for edge in self.graph.edges:
+                attri = self.graph.edges[edge]
+                diff = abs(attri['success'] / attri['attempt'] - attri['hidden_success_rate']) if attri['success'] > 0 else 0
+                # diff = attri['attempt']
+                exp_diff[edge].append(diff)
+
             
             print(f"path: {path_string}")
+        
+        # print(path_history)
+        window_size = 100
+        moving_averages = np.convolve(path_history, np.ones(window_size)/window_size, mode='valid')
+        moving_average_list = list(moving_averages)
+        print(moving_average_list)
+        plt.figure()
+        # plt.plot(moving_average_list, label="mav")
+
+        paths = [
+            [1, 2, 7, 8, 10],
+            [1, 3, 5, 8, 10],
+            [1, 3, 6, 9, 10],
+            [1, 4, 5, 8, 10],
+        ]
+
+        for path in paths:
+            path_diff = [a + b + c + d  for a, b, c, d in zip(exp_diff[(path[0], path[1])], exp_diff[(path[1], path[2])], exp_diff[(path[2], path[3])], exp_diff[(path[3], path[4])])]
+            plt.plot(path_diff, label=f"path {'->'.join(map(str, path))}")
+
+                
+
+        # 添加圖例
+        plt.legend()
+
+        # 顯示圖表
+        plt.show()
+        # self.plot_hist(path_history)
+        plt.figure(figsize=(8, 6))
+        nx.draw(self.graph, with_labels=True, node_color='skyblue', node_size=700, edge_color='gray')
+        plt.show()
+
+        
+    def plot_graph(self):
+        for edge in self.graph.edges:
+            attri = self.graph.edges[edge]
+            if attri['success'] > 0:
+                diff = abs(attri['attempt'] / attri['success'] - attri['hidden_success_rate'])
+            else:
+                diff = 1
             
-        self.plot_hist(path_history)
+                
+            
             
     def plot_hist(self, path_history: List[float]):
-
-        src, dst = self.packets[0].src, self.packets[0].dst
+        src, dst = self.start, self.end
+        # src, dst = self.packets[0].src, self.packets[0].dst
         best_path = self.shortest_path(src, dst)
         path_string = "->".join(map(str, best_path))
         print(f"best path: {path_string}")

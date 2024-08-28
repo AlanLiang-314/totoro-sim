@@ -9,7 +9,7 @@ if not os.path.exists(os.path.join("testset", testset_type)):
     os.makedirs(os.path.join("testset", testset_type))
 
 
-def gen_undirected_graph(n):
+def gen_directed_graph(n, src, dst):
     nodes = list(range(n))
 
     in_graph = [random.choice(nodes)]
@@ -24,20 +24,24 @@ def gen_undirected_graph(n):
 
         edges.append((rnd, to) if rnd < to else (to, rnd))
 
-    # ensure at least one pair of nodes has a distance greater than 5
-    if n > 6:
-        u, v = random.sample(range(n), 2)
-        while abs(u - v) <= 5:
-            u, v = random.sample(range(n), 2)
-        edges.append((u, v) if u < v else (v, u))
-        node1, node2 = u, v
-
     # add extra edges
     for _ in range(random.randint(3 * n, 4 * n)): # FIXME: collision!
         u = random.randint(0, n - 2)
         v = random.randint(u + 1, n - 1)
         if (u, v) not in edges and (v, u) not in edges:
             edges.append((u, v))
+            
+    # check direction of edges, doing a bfs traverse
+    visited = set()
+    queue = [in_graph[0]]
+    while queue:
+        node = queue.pop(0)
+        visited.add(node)
+        for u, v in edges:
+            if u == node and v not in visited:
+                queue.append(v)
+    if len(visited) != n:
+        raise ValueError("Graph is not connected")
 
     # randomly swap u, v
     edges = [(u, v) if random.randint(0, 1) else (v, u) for u, v in edges]
@@ -66,7 +70,7 @@ for seeds in range(1, 2):
     packet_num = 50
 
     # samples = [max(round(random.gauss(mean, std_dev)), 0) + 1 for _ in range(n)]
-    src, dst, graph = gen_undirected_graph(nodes)
+    src, dst, graph = gen_directed_graph(nodes)
     edges = len(graph)
 
     # src = random.randint(0, nodes)
