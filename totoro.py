@@ -5,6 +5,8 @@ import math
 import matplotlib.pyplot as plt
 from typing import List, Dict
 import networkx as nx
+import scipy.stats as stats
+
 
 def kl_divergence(p, q):
     # kl divergence, but can deal with [0, 1]
@@ -35,31 +37,13 @@ class Policy(ABC):
     def __repr__(self):
         return f"policy: {self.type}"
     
-    @abstractmethod
-    def weight_func(self, success: int, attempt: int, tol: float=1e-9):
-        pass
-
-    @abstractmethod
-    def Jt(self, src: int, dst: int):
-        pass
-
-    @abstractmethod
-    def choose_best(self, src: int, dst: int, t: int):
-        pass
-
-
-class Greedy(Policy):
-    def __init__(self, graph: nx.Graph) -> None:
-        super().__init__("Greedy", graph)
-        self.t = 0
-        self.C = 1.414
-        
     def constraint(self, u, mean_success_rate, attempt):
         return (attempt * kl_divergence(mean_success_rate, u)
                  - self.C * math.log(self.t)) <= 0
-
-
+    
+    # @abstractmethod
     def weight_func(self, success: int, attempt: int, tol: float=1e-9):
+        # print(f"self.t {self.t}, self.C: {self.C}")
         if attempt == 0:
             # if not yet attempted, try it first
             return 0
@@ -74,11 +58,21 @@ class Greedy(Policy):
                 low = mid
             else:
                 high = mid
+        if low == 0:
+            return 0
+        else:
+            return 1 / low
 
-        return 1 / low
-    
-    def Jt(self, src, dst):
-        return 0
+    @abstractmethod
+    def choose_best(self, src: int, dst: int, t: int):
+        pass
+
+
+class Greedy(Policy):
+    def __init__(self, graph: nx.Graph, c=1.414) -> None:
+        super().__init__("Greedy", graph)
+        self.t = 0
+        self.C = c
     
     def choose_best(self, src, dst, t, printing=False):
         self.t = t
@@ -99,7 +93,7 @@ class Greedy(Policy):
                 print(f"best neighbor {best_neighbor}, best cost {best_cost}")
                 
         if len(best_neighbor) > 1:
-            best_neighbor = random.choice(best_neighbor)
+            best_neighbor = np.random.choice(best_neighbor)
         else:
             best_neighbor = best_neighbor[0]
 
@@ -107,41 +101,13 @@ class Greedy(Policy):
 
 
 class End2End(Policy):
-    def __init__(self, graph: nx.Graph) -> None:
+    def __init__(self, graph: nx.Graph, c = 1.414) -> None:
         super().__init__("End2End", graph)
         self.t = 0
-        self.C = 1.414
+        self.C = c
         self.first_attempt = True
         self.avaliable_path = [] # hack
         
-    def constraint(self, u, mean_success_rate, attempt):
-        return (attempt * kl_divergence(mean_success_rate, u)
-                 - self.C * math.log(self.t)) <= 0
-
-    def weight_func(self, success: int, attempt: int, tol: float=1e-9):
-        if attempt == 0:
-            # if not yet attempted, try it first
-            return 0
-
-        mean_success_rate = success / attempt
-        
-        low, high = mean_success_rate, 1
-        
-        while high - low > tol:
-            mid = (low + high) / 2
-            if self.constraint(mid, mean_success_rate, attempt):
-                low = mid
-            else:
-                high = mid
-                
-        if low == 0:
-            return float('inf')
-
-        return 1 / low
-
-    def Jt(self, src, dst):
-        return 0
-    
     def update_path_status(self, path_id: int, success: bool):
         if self.avaliable_path:
             if success:
@@ -151,10 +117,10 @@ class End2End(Policy):
     def choose_best(self, src, dst, t, printing=False):
         if self.first_attempt:
             for path in nx.all_simple_paths(self.graph, source=src, target=dst):
-                print(f"path: {path}")
+                # print(f"path: {path}")
                 self.avaliable_path.append({'path': path, 'success': 0, 'attempt': 0})
             self.first_attempt = False
-            print(f"there are {len(self.avaliable_path)} paths from {src} to {dst}")
+            # print(f"there are {len(self.avaliable_path)} paths from {src} to {dst}")
         
         self.t = t
         best_path = []
@@ -162,7 +128,7 @@ class End2End(Policy):
                 
         for i, path in enumerate(self.avaliable_path):
             cost = self.weight_func(path['success'], path['attempt'])
-            print(f"path {path}, cost {cost}")
+            # print(f"path {path}, cost {cost}")
             
             if best_cost > cost:
                 best_cost = cost
@@ -171,13 +137,13 @@ class End2End(Policy):
                 best_path.append(i)
 
         if len(best_path) > 1:
-                best_path = random.choice(best_path)
+                best_path = np.random.choice(best_path)
         else:
             best_path = best_path[0]
             
         return best_path, self.avaliable_path[best_path]['path']
     
-    def __choose_best(self, src, dst, t, printing=False):
+    def choose_best_2(self, src, dst, t, printing=False):
         if self.first_attempt:
             for path in nx.all_simple_paths(self.graph, source=src, target=dst):
                 print(f"path: {path}")
@@ -202,34 +168,11 @@ class End2End(Policy):
 
 
 class Totoro(Policy):
-    def __init__(self, graph: nx.Graph) -> None:
+    def __init__(self, graph: nx.Graph, c=1.414) -> None:
         super().__init__("Totoro", graph)
         self.t = 0
-        self.C = 1.414
+        self.C = c
 
-    def constraint(self, u, mean_success_rate, attempt):
-        return (attempt * kl_divergence(mean_success_rate, u)
-                 - self.C * math.log(self.t)) <= 0
-
-
-    def weight_func(self, success: int, attempt: int, tol: float=1e-9):
-        if attempt == 0:
-            # if not yet attempted, try it first
-            return 0
-
-        mean_success_rate = success / attempt
-        
-        low, high = mean_success_rate, 1
-        
-        while high - low > tol:
-            mid = (low + high) / 2
-            if self.constraint(mid, mean_success_rate, attempt):
-                low = mid
-            else:
-                high = mid
-
-        return 1 / low
-    
     def Jt(self, src, dst):
         try:
             # Find the shortest path using Dijkstra's algorithm
@@ -272,7 +215,7 @@ class Totoro(Policy):
                 print(f"best neighbor {best_neighbor}, best cost {best_cost}")
         
         if len(best_neighbor) > 1:
-                best_neighbor = random.choice(best_neighbor)
+                best_neighbor = np.random.choice(best_neighbor)
         else:
             best_neighbor = best_neighbor[0]
 
@@ -292,14 +235,16 @@ class Simulator:
         self.end: int = None
         self.packet_num: int = 0
         self.t = 1
+        # np.random.seed(42)
     
-    def load_sim(self, path: str):
+    def load_sim(self, path: str, packet_num: int = 100):
         # load graph and packet sequence from .txt file
         # doesn't check the format
         fp = open(path, 'r')
         itertor = iter(fp)
         
         self.V, self.E, self.packet_num, self.start, self.end = map(int, next(itertor).split())
+        self.packet_num = packet_num
         
         # load link and it's prob
         for _ in range(self.E):
@@ -329,72 +274,89 @@ class Simulator:
             self.t = 1
             
     def simulate_end2end(self):
-        path_history = []
-        print(f"packet num: {len(self.packets)}")
+    
+        
+        paths = list(nx.all_simple_paths(self.graph, source=self.start, target=self.end))
+
+        path_history = [[] for i in range(len(paths))]
+        path_ceil = [[] for i in range(len(paths))]
+        path_floor = [[] for i in range(len(paths))]
+        
+        # print(f"packet num: {len(self.packets)}")
         
         for idx in range(self.packet_num):
             src, dst = self.start, self.end
             # src, dst = int(packet.src), int(packet.dst)
-            print(f"sending packet {idx} from {src} to {dst}")
+            # print(f"sending packet {idx} from {src} to {dst}")
             
             best_path_id, best_path = self.policy.choose_best(src, dst, self.t)
             success = True
-            print(f"best path: {best_path}")
+            # print(f"best path: {best_path}")
             
             for u, v in zip(best_path, best_path[1:]):
                 chosen_link = self.graph.edges[(u, v)]
-                if random.random() > chosen_link['hidden_success_rate']:
+                if np.random.random() > chosen_link['hidden_success_rate']:
                     success = False
                     break
             
             self.t += 1
                 
             self.policy.update_path_status(best_path_id, success)
+            for i, path in enumerate(self.policy.avaliable_path):
+                credible_interval = stats.beta.ppf([0.025, 0.975], path['success'] + 1, path['attempt'] - path['success'] + 1)
+                # print(f"path {i}, credible: {credible_interval}")
+                path_ceil[i].append(credible_interval[0])
+                path_floor[i].append(credible_interval[1])
             
-            path_string = "->".join(map(str, best_path))
-            path_weight = sum(1 / (self.graph.edges[(w, v)]['hidden_success_rate'] + 1e-9) for w, v in zip(best_path, best_path[1:]))
-            # path_history.append(path_weight)
-            path_history.append(1 if best_path == [1, 2, 7, 8, 10] else 0)
-            print(f"path: {path_string}")
+            # path_string = "->".join(map(str, best_path))
+            # print(f"path: {path_string}")
             
-        # self.plot_hist(path_history)
-        plt.figure()
-        window_size = 100
-        moving_averages = np.convolve(path_history, np.ones(window_size)/window_size, mode='valid')
-        moving_average_list = list(moving_averages)
-        plt.plot(moving_average_list, label="mav")
+            for i, path in enumerate(paths):
+                path_history[i].append(1 if best_path == path else 0)
+            
+        print("iter done")
+        # self.plot_attempt(paths, path_history)
+        # start = 500
+        # end = 1000
+        # for path, ceil, floor in zip(paths, path_ceil, path_floor):
+        #     # color = next(plt.gca()._get_lines.prop_cycler)['color']  # 獲取下一個顏色
+        #     fill_between_obj = plt.fill_between(range(len(ceil[start:end])), ceil[start:end], floor[start:end], alpha=0.3, label=f"path {'->'.join(map(str, path))}")  # 填充 ceil 和 floor 之間的區域
+        #     fill_color = fill_between_obj.get_facecolor()[0]
+        #     fill_color = (fill_color[0], fill_color[1], fill_color[2], 1)
+        #     plt.plot(ceil[start:end], color= fill_color)
+        #     plt.plot(floor[start:end], color = fill_color)
+        # plt.legend()
+        # plt.show()
 
-        # 添加圖例
-        plt.legend()
-
-        # 顯示圖表
-        plt.show()
+        return path_history
 
 
                     
 
-    def simulate(self):
+    def simulate(self, c):
         # init policy
         if self.Policy == "Totoro":
-            self.policy = Totoro(graph=self.graph)
+            self.policy = Totoro(graph=self.graph, c=c)
         elif self.Policy == "Greedy":
-            self.policy = Greedy(graph=self.graph)
+            self.policy = Greedy(graph=self.graph, c=c)
         elif self.Policy == "End2End":
-            self.policy = End2End(graph=self.graph)
-            self.simulate_end2end()
-            return
+            self.policy = End2End(graph=self.graph, c=c)
+            path_history = self.simulate_end2end()
+            return path_history
         else:
             print(f"no such policy: {self.Policy}")
             exit(1)
         
-        path_history = []
-        
-        exp_diff = {edge:[] for edge in self.graph.edges}
+        paths = list(nx.all_simple_paths(self.graph, source=self.start, target=self.end))
+
+        path_history = [[] for i in range(len(paths))]
+
+
 
         for idx in range(self.packet_num):
             src, dst = self.start, self.end
             # src, dst = int(packet.src), int(packet.dst)
-            print(f"sending packet {idx} from {src} to {dst}")
+            # print(f"sending packet {idx} from {src} to {dst}")
 
             packet_path = [src]
             
@@ -405,7 +367,7 @@ class Simulator:
                 # print(f"choose link {src}->{best_neighbor}, ", end="")
 
                 chosen_link = self.graph.edges[(src, best_neighbor)]
-                if random.random() <= chosen_link['hidden_success_rate']:
+                if np.random.random() <= chosen_link['hidden_success_rate']:
                     # print("transmission success")
                     chosen_link['success'] += 1
                     packet_path.append(best_neighbor)
@@ -417,50 +379,20 @@ class Simulator:
 
                 self.t += 1
             
-            path_string = "->".join(map(str, packet_path))
-            path_weight = sum(1 / (self.graph.edges[(w, v)]['hidden_success_rate'] + 1e-9) for w, v in zip(packet_path, packet_path[1:]))
-            path_history.append(1 if packet_path == [1, 2, 7, 8, 10] else 0)
+            path_string = "->".join(map(str, packet_path))            
+            # print(f"path: {path_string}")
             
-            for edge in self.graph.edges:
-                attri = self.graph.edges[edge]
-                diff = abs(attri['success'] / attri['attempt'] - attri['hidden_success_rate']) if attri['success'] > 0 else 0
-                # diff = attri['attempt']
-                exp_diff[edge].append(diff)
+            for i, path in enumerate(paths):
+                path_history[i].append(1 if packet_path == path else 0)
 
             
-            print(f"path: {path_string}")
+        # shortest_path = self.shortest_path(src, dst)
+        # print(shortest_path)
+        # self.plot_attempt(paths, path_history)
+        print("iter done")
+        return path_history
         
-        # print(path_history)
-        window_size = 100
-        moving_averages = np.convolve(path_history, np.ones(window_size)/window_size, mode='valid')
-        moving_average_list = list(moving_averages)
-        print(moving_average_list)
-        plt.figure()
-        # plt.plot(moving_average_list, label="mav")
-
-        paths = [
-            [1, 2, 7, 8, 10],
-            [1, 3, 5, 8, 10],
-            [1, 3, 6, 9, 10],
-            [1, 4, 5, 8, 10],
-        ]
-
-        for path in paths:
-            path_diff = [a + b + c + d  for a, b, c, d in zip(exp_diff[(path[0], path[1])], exp_diff[(path[1], path[2])], exp_diff[(path[2], path[3])], exp_diff[(path[3], path[4])])]
-            plt.plot(path_diff, label=f"path {'->'.join(map(str, path))}")
-
-                
-
-        # 添加圖例
-        plt.legend()
-
-        # 顯示圖表
-        plt.show()
-        # self.plot_hist(path_history)
-        plt.figure(figsize=(8, 6))
-        nx.draw(self.graph, with_labels=True, node_color='skyblue', node_size=700, edge_color='gray')
-        plt.show()
-
+        
         
     def plot_graph(self):
         for edge in self.graph.edges:
@@ -473,22 +405,18 @@ class Simulator:
                 
             
             
-    def plot_hist(self, path_history: List[float]):
-        src, dst = self.start, self.end
-        # src, dst = self.packets[0].src, self.packets[0].dst
-        best_path = self.shortest_path(src, dst)
-        path_string = "->".join(map(str, best_path))
-        print(f"best path: {path_string}")
-
-        window_size = 20
-        moving_avg = np.convolve(path_history, np.ones(window_size)/window_size, mode='valid')
-        plt.plot(path_history, label='Path History', marker='o')
-
+    def plot_attempt(self, paths, path_history):
+        for path, history in zip(paths, path_history):
+            path_history_cumsum = np.cumsum(history)
+            prob = 1
+            for v1, v2 in zip(path, path[1:]):
+                prob *= self.graph.edges[(v1, v2)]['hidden_success_rate']
+                
+            plt.plot(path_history_cumsum, label=f"path {'->'.join(map(str, path))}, prob {prob:.3f}")
+            
         plt.xlabel('packet num')
-        plt.ylabel('Path weight')
-        plt.title('Path History and Moving Average')
+        plt.ylabel('attempt')
+        plt.title('Path History')
+        
         plt.legend()
-
-        # Show the plot
         plt.show()
-
