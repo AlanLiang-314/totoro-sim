@@ -279,8 +279,6 @@ class Simulator:
         paths = list(nx.all_simple_paths(self.graph, source=self.start, target=self.end))
 
         path_history = [[] for i in range(len(paths))]
-        path_ceil = [[] for i in range(len(paths))]
-        path_floor = [[] for i in range(len(paths))]
         
         # print(f"packet num: {len(self.packets)}")
         
@@ -302,11 +300,6 @@ class Simulator:
             self.t += 1
                 
             self.policy.update_path_status(best_path_id, success)
-            for i, path in enumerate(self.policy.avaliable_path):
-                credible_interval = stats.beta.ppf([0.025, 0.975], path['success'] + 1, path['attempt'] - path['success'] + 1)
-                # print(f"path {i}, credible: {credible_interval}")
-                path_ceil[i].append(credible_interval[0])
-                path_floor[i].append(credible_interval[1])
             
             # path_string = "->".join(map(str, best_path))
             # print(f"path: {path_string}")
@@ -315,7 +308,7 @@ class Simulator:
                 path_history[i].append(1 if best_path == path else 0)
             
         print("iter done")
-        # self.plot_attempt(paths, path_history)
+        self.plot_attempt(paths, path_history)
         # start = 500
         # end = 1000
         # for path, ceil, floor in zip(paths, path_ceil, path_floor):
@@ -388,7 +381,7 @@ class Simulator:
             
         # shortest_path = self.shortest_path(src, dst)
         # print(shortest_path)
-        # self.plot_attempt(paths, path_history)
+        self.plot_attempt(paths, path_history)
         print("iter done")
         return path_history
         
