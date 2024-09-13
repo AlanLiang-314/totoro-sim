@@ -259,7 +259,7 @@ class Simulator:
         
         fp.close()
 
-        print(f"load graph with {self.V} nodes and {self.E} edges with {self.packet_num} packets")
+        # print(f"load graph with {self.V} nodes and {self.E} edges with {self.packet_num} packets")
 
     def shortest_path(self, src, dst):
             weight_func = lambda u, v, d: 1 / (d['hidden_success_rate'] + 1e-9)
@@ -307,7 +307,7 @@ class Simulator:
             for i, path in enumerate(paths):
                 path_history[i].append(1 if best_path == path else 0)
             
-        print("iter done")
+        # print("iter done")
         self.plot_attempt(paths, path_history)
         # start = 500
         # end = 1000
@@ -381,8 +381,8 @@ class Simulator:
             
         # shortest_path = self.shortest_path(src, dst)
         # print(shortest_path)
-        self.plot_attempt(paths, path_history)
-        print("iter done")
+        # self.plot_attempt(paths, path_history)
+        # print("iter done")
         return path_history
         
         
